@@ -379,8 +379,7 @@
         async function loadAppData() {
             try {
                 const { data: banks, error: bErr } = await supabaseClient.from('banks').select('*');
-                // Increased range limit to 5000 questions to prevent truncation
-                const { data: questions, error: qErr } = await supabaseClient.from('questions').select('*').range(0, 4999);
+                const { data: questions, error: qErr } = await supabaseClient.from('questions').select('*');
                 
                 if (bErr || qErr) {
                     console.error('Error loading data', bErr || qErr);
