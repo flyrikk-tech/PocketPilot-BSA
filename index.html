@@ -26,9 +26,13 @@
                 <span class="text-xs text-blue-400 font-medium">ATPL Exam Trainer</span>
             </div>
         </div>
-        <div id="header-user-area" class="flex items-center gap-3 hidden">
-            <span id="user-email-display" class="text-xs text-slate-400 hidden sm:inline"></span>
-            <button onclick="logoutUser()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs px-3 py-2 rounded-xl font-medium transition-all">Sign Out</button>
+        <div class="flex items-center gap-3">
+            <span id="connection-status" class="text-xs text-emerald-400 font-medium hidden sm:inline">Connected 🟢</span>
+            <div id="header-user-area" class="flex items-center gap-3 hidden">
+                <span id="user-email-display" class="text-xs text-slate-400 hidden sm:inline"></span>
+                <button onclick="openAddModal()" class="bg-blue-600 hover:bg-blue-500 active:scale-95 text-white w-9 h-9 rounded-xl flex items-center justify-center font-bold text-lg shadow-lg transition-all" title="Add Question Bank">+</button>
+                <button onclick="logoutUser()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs px-3 py-2 rounded-xl font-medium transition-all">Sign Out</button>
+            </div>
         </div>
     </header>
 
@@ -39,7 +43,7 @@
         <div id="view-auth" class="max-w-md mx-auto mt-12 bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-6">
             <div class="text-center space-y-2">
                 <h2 class="text-2xl font-bold text-white">Pilot Login</h2>
-                <p id="connection-status" class="text-xs text-amber-400 font-medium">Connecting to Supabase...</p>
+                <p class="text-xs text-slate-400">Log in to sync your progress across devices.</p>
             </div>
             
             <div class="space-y-4">
@@ -65,7 +69,7 @@
                 <div>
                     <h2 class="text-2xl font-bold mb-2 text-white">Welcome back, Pilot 👨‍✈️</h2>
                     <p class="text-sm text-slate-300 leading-relaxed">
-                        Select a question bank below to start training. All question banks are centrally updated.
+                        Select a question bank below to start training. Tap the <span class="text-blue-400 font-bold">+</span> button above to paste new questions directly from Word.
                     </p>
                 </div>
                 <div id="header-stats" class="text-right text-xs text-slate-300 font-medium bg-slate-950/60 p-3 rounded-xl border border-slate-800 hidden sm:block"></div>
@@ -174,6 +178,30 @@
 
     </main>
 
+    <!-- ADD CONTENT MODAL -->
+    <div id="modal-add" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-lg shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+                <h3 class="font-bold text-lg text-white flex items-center gap-2"><span>📥</span> Import Word Questions</h3>
+                <button onclick="closeAddModal()" class="text-slate-400 hover:text-white text-lg font-bold p-1">✕</button>
+            </div>
+
+            <div class="space-y-3">
+                <div>
+                    <label class="block text-xs font-medium text-slate-300 mb-1">Bank Title</label>
+                    <input type="text" id="import-bank-title" placeholder="E.g. 010 Air Law" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-blue-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-300 mb-1">Paste questions directly from Word</label>
+                    <textarea id="import-raw-text" rows="8" placeholder="1.&#10;What is VFR?&#10;a) ...&#10;*b) Correct answer&#10;c) ...&#10;d) ..." class="w-full bg-slate-950 border border-slate-700 rounded-xl p-4 text-sm text-white font-mono placeholder-slate-600 focus:outline-none focus:border-blue-500"></textarea>
+                </div>
+                <button onclick="importAndSaveBank()" class="w-full bg-blue-600 hover:bg-blue-500 active:scale-[0.99] font-semibold py-3.5 rounded-xl text-white shadow-lg text-sm transition-all">
+                    Parse & Save to Cloud Database 🚀
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- JavaScript Logic -->
     <script>
         const SUPABASE_URL = 'https://nqjndoawqzkszilxsnnj.supabase.co';
@@ -181,13 +209,8 @@
         
         let supabaseClient = null;
         try {
-            // Supabase v2 global object is named 'supabase' directly
             supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-            document.getElementById('connection-status').innerText = "Status: Connected to Supabase 🟢";
-            document.getElementById('connection-status').className = "text-xs text-emerald-400 font-medium";
         } catch (e) {
-            document.getElementById('connection-status').innerText = "Status: Error connecting to Supabase 🔴";
-            document.getElementById('connection-status').className = "text-xs text-rose-400 font-medium";
             alert("Supabase Error: " + e.message);
         }
 
@@ -248,8 +271,17 @@
             document.getElementById('view-setup').classList.add('hidden');
             document.getElementById('view-quiz').classList.add('hidden');
             document.getElementById('view-flashcard').classList.add('hidden');
+            closeAddModal();
             renderBanksList();
             updateHeaderStats();
+        }
+
+        function openAddModal() {
+            document.getElementById('modal-add').classList.remove('hidden');
+        }
+
+        function closeAddModal() {
+            document.getElementById('modal-add').classList.add('hidden');
         }
 
         async function handleLogin() {
@@ -337,6 +369,120 @@
             }
         }
 
+        // --- SMART WORD TEXT PARSER ---
+        async function importAndSaveBank() {
+            const title = document.getElementById('import-bank-title').value.trim();
+            const rawText = document.getElementById('import-raw-text').value.trim();
+
+            if (!title || !rawText) {
+                alert('Please fill out both the bank title and paste the questions.');
+                return;
+            }
+
+            const parsedQuestions = parseWordQuizText(rawText);
+            if (parsedQuestions.length === 0) {
+                alert('Could not recognize any questions. Make sure format matches "1." followed by question text, and options like "a)" or "*b)".');
+                return;
+            }
+
+            // 1. Insert Bank into Supabase
+            const { data: bankData, error: bankErr } = await supabaseClient
+                .from('banks')
+                .insert({ title: title, type: 'quiz' })
+                .select()
+                .single();
+
+            if (bankErr) {
+                alert('Error creating bank: ' + bankErr.message);
+                return;
+            }
+
+            const bankId = bankData.id;
+
+            // 2. Insert Questions into Supabase
+            const questionsToInsert = parsedQuestions.map(q => ({
+                bank_id: bankId,
+                text: q.text,
+                options: q.options
+            }));
+
+            const { error: qErr } = await supabaseClient
+                .from('questions')
+                .insert(questionsToInsert);
+
+            if (qErr) {
+                alert('Error saving questions: ' + qErr.message);
+                return;
+            }
+
+            alert(`Successfully imported ${parsedQuestions.length} questions into "${title}"!`);
+            document.getElementById('import-bank-title').value = '';
+            document.getElementById('import-raw-text').value = '';
+            closeAddModal();
+            await loadAppData();
+            showHome();
+        }
+
+        function parseWordQuizText(text) {
+            const lines = text.split('\n').map(l => l.trim()).filter(l => l !== '');
+            let questions = [];
+            let currentQ = null;
+
+            for (let i = 0; i < lines.length; i++) {
+                let line = lines[i];
+
+                // Matches question number like "1.", "1)", etc.
+                const qMatch = line.match(/^(\d+)[\.\)]\s*(.*)$/);
+                // Matches option like "a)", "*b)", "c.", etc.
+                const optMatch = line.match(/^(\*)?([a-zA-Z])[\.\)]\s*(.*)$/);
+
+                if (qMatch) {
+                    if (currentQ && currentQ.options.length > 0) {
+                        questions.push(currentQ);
+                    }
+                    currentQ = {
+                        text: qMatch[2] ? qMatch[2] : '',
+                        options: []
+                    };
+                } else if (optMatch) {
+                    const isCorrect = !!optMatch[1];
+                    let optText = optMatch[3];
+                    let textLines = [];
+                    if (optText) textLines.push(optText);
+
+                    // Gather multi-line option text if it spans to next lines
+                    while (i + 1 < lines.length) {
+                        let nextLine = lines[i + 1];
+                        if (/^(\d+)[\.\)]/.test(nextLine) || /^(\*)?[a-zA-Z][\.\)]/.test(nextLine)) {
+                            break;
+                        }
+                        textLines.push(nextLine);
+                        i++;
+                    }
+
+                    if (currentQ) {
+                        currentQ.options.push({
+                            text: textLines.join(' '),
+                            correct: isCorrect
+                        });
+                    }
+                } else {
+                    // Continuation of question text
+                    if (currentQ && currentQ.options.length === 0) {
+                        if (currentQ.text) {
+                            currentQ.text += " " + line;
+                        } else {
+                            currentQ.text = line;
+                        }
+                    }
+                }
+            }
+            if (currentQ && currentQ.options.length > 0) {
+                questions.push(currentQ);
+            }
+            return questions;
+        }
+
         function updateHeaderStats() {
             let totalItems = 0;
             let totalCorrect = 0;
@@ -355,7 +501,7 @@
         function renderBanksList() {
             const container = document.getElementById('banks-list');
             if (banksData.length === 0) {
-                container.innerHTML = `<div class="text-center py-12 text-slate-500 bg-slate-900/40 border border-slate-800 rounded-2xl text-sm">No question banks found in database.</div>`;
+                container.innerHTML = `<div class="text-center py-12 text-slate-500 bg-slate-900/40 border border-slate-800 rounded-2xl text-sm">No question banks found. Tap the <span class="text-blue-400 font-bold">+</span> button above to import your first Word bank!</div>`;
                 return;
             }
 
