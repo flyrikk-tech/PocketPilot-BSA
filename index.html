@@ -27,10 +27,10 @@
             </div>
         </div>
         <div class="flex items-center gap-3">
-            <span id="connection-status" class="text-xs text-emerald-400 font-medium hidden sm:inline">Connected 🟢</span>
             <div id="header-user-area" class="flex items-center gap-3 hidden">
                 <span id="user-email-display" class="text-xs text-slate-400 hidden sm:inline"></span>
-                <button onclick="openAddModal()" class="bg-blue-600 hover:bg-blue-500 active:scale-95 text-white w-9 h-9 rounded-xl flex items-center justify-center font-bold text-lg shadow-lg transition-all" title="Add Question Bank">+</button>
+                <!-- Admin Only Add Button -->
+                <button id="admin-add-btn" onclick="openAddModal()" class="bg-blue-600 hover:bg-blue-500 active:scale-95 text-white w-9 h-9 rounded-xl hidden items-center justify-center font-bold text-lg shadow-lg transition-all" title="Add Question Bank">+</button>
                 <button onclick="logoutUser()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs px-3 py-2 rounded-xl font-medium transition-all">Sign Out</button>
             </div>
         </div>
@@ -68,8 +68,8 @@
             <div class="bg-gradient-to-r from-blue-900/40 to-slate-900 p-6 rounded-2xl border border-blue-800/40 shadow-xl flex items-center justify-between">
                 <div>
                     <h2 class="text-2xl font-bold mb-2 text-white">Welcome back, Pilot 👨‍✈️</h2>
-                    <p class="text-sm text-slate-300 leading-relaxed">
-                        Select a question bank below to start training. Tap the <span class="text-blue-400 font-bold">+</span> button above to paste new questions directly from Word.
+                    <p id="welcome-subtitle" class="text-sm text-slate-300 leading-relaxed">
+                        Select a question bank below to start training. All question banks are centrally updated.
                     </p>
                 </div>
                 <div id="header-stats" class="text-right text-xs text-slate-300 font-medium bg-slate-950/60 p-3 rounded-xl border border-slate-800 hidden sm:block"></div>
@@ -178,7 +178,7 @@
 
     </main>
 
-    <!-- ADD CONTENT MODAL -->
+    <!-- ADD CONTENT MODAL (ADMIN ONLY) -->
     <div id="modal-add" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
         <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-lg shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
             <div class="flex items-center justify-between pb-3 border-b border-slate-800">
@@ -207,6 +207,9 @@
         const SUPABASE_URL = 'https://nqjndoawqzkszilxsnnj.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5xam5kb2F3cXprc3ppbHhzbm5qIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE4NzA5NTgsImV4cCI6MjEwNzQ0Njk1OH0.5M8wGb0FJRUIjtWJbinDeuXGgoXbRu0MIUWB6xgWE5c';
         
+        // Configured Admin Email
+        const ADMIN_EMAIL = 'flyrikk@gmail.com';
+
         let supabaseClient = null;
         try {
             supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -232,6 +235,16 @@
                     currentUser = session.user;
                     document.getElementById('user-email-display').innerText = currentUser.email;
                     document.getElementById('header-user-area').classList.remove('hidden');
+                    
+                    if (currentUser.email === ADMIN_EMAIL) {
+                        document.getElementById('admin-add-btn').classList.remove('hidden');
+                        document.getElementById('admin-add-btn').classList.add('flex');
+                        document.getElementById('welcome-subtitle').innerText = "Select a question bank below to start training. Tap the + button above to import new questions.";
+                    } else {
+                        document.getElementById('admin-add-btn').classList.add('hidden');
+                        document.getElementById('welcome-subtitle').innerText = "Select a question bank below to start training. All question banks are centrally updated.";
+                    }
+
                     await loadAppData();
                     showHome();
                 } else {
@@ -243,6 +256,16 @@
                         currentUser = session.user;
                         document.getElementById('user-email-display').innerText = currentUser.email;
                         document.getElementById('header-user-area').classList.remove('hidden');
+                        
+                        if (currentUser.email === ADMIN_EMAIL) {
+                            document.getElementById('admin-add-btn').classList.remove('hidden');
+                            document.getElementById('admin-add-btn').classList.add('flex');
+                            document.getElementById('welcome-subtitle').innerText = "Select a question bank below to start training. Tap the + button above to import new questions.";
+                        } else {
+                            document.getElementById('admin-add-btn').classList.add('hidden');
+                            document.getElementById('welcome-subtitle').innerText = "Select a question bank below to start training. All question banks are centrally updated.";
+                        }
+
                         await loadAppData();
                         showHome();
                     } else {
@@ -258,6 +281,7 @@
         }
 
         function showAuth() {
+            document.getElementById('view-auth').classList.add('hidden');
             document.getElementById('view-auth').classList.remove('hidden');
             document.getElementById('view-home').classList.add('hidden');
             document.getElementById('view-setup').classList.add('hidden');
@@ -277,6 +301,7 @@
         }
 
         function openAddModal() {
+            if (currentUser.email !== ADMIN_EMAIL) return;
             document.getElementById('modal-add').classList.remove('hidden');
         }
 
@@ -369,8 +394,13 @@
             }
         }
 
-        // --- SMART WORD TEXT PARSER ---
+        // --- SMART WORD TEXT PARSER (ADMIN ONLY) ---
         async function importAndSaveBank() {
+            if (currentUser.email !== ADMIN_EMAIL) {
+                alert('Unauthorized action.');
+                return;
+            }
+
             const title = document.getElementById('import-bank-title').value.trim();
             const rawText = document.getElementById('import-raw-text').value.trim();
 
@@ -385,7 +415,6 @@
                 return;
             }
 
-            // 1. Insert Bank into Supabase
             const { data: bankData, error: bankErr } = await supabaseClient
                 .from('banks')
                 .insert({ title: title, type: 'quiz' })
@@ -399,7 +428,6 @@
 
             const bankId = bankData.id;
 
-            // 2. Insert Questions into Supabase
             const questionsToInsert = parsedQuestions.map(q => ({
                 bank_id: bankId,
                 text: q.text,
@@ -431,9 +459,7 @@
             for (let i = 0; i < lines.length; i++) {
                 let line = lines[i];
 
-                // Matches question number like "1.", "1)", etc.
                 const qMatch = line.match(/^(\d+)[\.\)]\s*(.*)$/);
-                // Matches option like "a)", "*b)", "c.", etc.
                 const optMatch = line.match(/^(\*)?([a-zA-Z])[\.\)]\s*(.*)$/);
 
                 if (qMatch) {
@@ -450,7 +476,6 @@
                     let textLines = [];
                     if (optText) textLines.push(optText);
 
-                    // Gather multi-line option text if it spans to next lines
                     while (i + 1 < lines.length) {
                         let nextLine = lines[i + 1];
                         if (/^(\d+)[\.\)]/.test(nextLine) || /^(\*)?[a-zA-Z][\.\)]/.test(nextLine)) {
@@ -467,7 +492,6 @@
                         });
                     }
                 } else {
-                    // Continuation of question text
                     if (currentQ && currentQ.options.length === 0) {
                         if (currentQ.text) {
                             currentQ.text += " " + line;
@@ -501,7 +525,7 @@
         function renderBanksList() {
             const container = document.getElementById('banks-list');
             if (banksData.length === 0) {
-                container.innerHTML = `<div class="text-center py-12 text-slate-500 bg-slate-900/40 border border-slate-800 rounded-2xl text-sm">No question banks found. Tap the <span class="text-blue-400 font-bold">+</span> button above to import your first Word bank!</div>`;
+                container.innerHTML = `<div class="text-center py-12 text-slate-500 bg-slate-900/40 border border-slate-800 rounded-2xl text-sm">No question banks found.</div>`;
                 return;
             }
 
