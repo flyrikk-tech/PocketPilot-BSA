@@ -39,7 +39,7 @@
         <div id="view-auth" class="max-w-md mx-auto mt-12 bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-6">
             <div class="text-center space-y-2">
                 <h2 class="text-2xl font-bold text-white">Pilot Login</h2>
-                <p class="text-xs text-slate-400">Log in to sync your progress across devices.</p>
+                <p id="connection-status" class="text-xs text-amber-400 font-medium">Connecting to Supabase...</p>
             </div>
             
             <div class="space-y-4">
@@ -48,10 +48,10 @@
                     <input type="email" id="auth-email" placeholder="pilot@airline.com" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-blue-500">
                 </div>
                 <div>
-                    <label class="block text-xs font-medium text-slate-300 mb-1">Password</label>
+                    <label class="block text-xs font-medium text-slate-300 mb-1">Password (min 6 chars)</label>
                     <input type="password" id="auth-password" placeholder="••••••••" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-blue-500">
                 </div>
-                <div id="auth-error" class="text-xs text-rose-400 text-center hidden"></div>
+                <div id="auth-error" class="text-xs text-rose-400 text-center font-medium bg-rose-950/40 p-3 rounded-xl border border-rose-900/50 hidden"></div>
                 <div class="pt-2 flex gap-3">
                     <button onclick="handleLogin()" class="flex-1 bg-blue-600 hover:bg-blue-500 font-semibold py-3 rounded-xl text-white text-sm shadow-lg transition-all">Log In</button>
                     <button onclick="handleSignup()" class="flex-1 bg-slate-800 hover:bg-slate-700 font-semibold py-3 rounded-xl text-slate-200 text-sm transition-all">Sign Up</button>
@@ -174,7 +174,7 @@
 
     </main>
 
-    <!-- JavaScript Logic with Robust Error Handling -->
+    <!-- JavaScript Logic -->
     <script>
         const SUPABASE_URL = 'https://nqjndoawqzkszilxsnnj.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5xam5kb2F3cXprc3ppbHhzbm5qIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE4NzA5NTgsImV4cCI6MjEwNzQ0Njk1OH0.5M8wGb0FJRUIjtWJbinDeuXGgoXbRu0MIUWB6xgWE5c';
@@ -182,8 +182,12 @@
         let supabase = null;
         try {
             supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            document.getElementById('connection-status').innerText = "Status: Connected to Supabase 🟢";
+            document.getElementById('connection-status').className = "text-xs text-emerald-400 font-medium";
         } catch (e) {
-            alert("Failed to initialize Supabase: " + e.message);
+            document.getElementById('connection-status').innerText = "Status: Error connecting to Supabase 🔴";
+            document.getElementById('connection-status').className = "text-xs text-rose-400 font-medium";
+            alert("Supabase Error: " + e.message);
         }
 
         let currentUser = null;
@@ -273,6 +277,12 @@
 
             if (!email || !password) {
                 errEl.innerText = "Please enter email and password.";
+                errEl.classList.remove('hidden');
+                return;
+            }
+
+            if (password.length < 6) {
+                errEl.innerText = "Password must be at least 6 characters.";
                 errEl.classList.remove('hidden');
                 return;
             }
