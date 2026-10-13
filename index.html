@@ -179,9 +179,10 @@
         const SUPABASE_URL = 'https://nqjndoawqzkszilxsnnj.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5xam5kb2F3cXprc3ppbHhzbm5qIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE4NzA5NTgsImV4cCI6MjEwNzQ0Njk1OH0.5M8wGb0FJRUIjtWJbinDeuXGgoXbRu0MIUWB6xgWE5c';
         
-        let supabase = null;
+        let supabaseClient = null;
         try {
-            supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            // Supabase v2 global object is named 'supabase' directly
+            supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
             document.getElementById('connection-status').innerText = "Status: Connected to Supabase 🟢";
             document.getElementById('connection-status').className = "text-xs text-emerald-400 font-medium";
         } catch (e) {
@@ -201,9 +202,9 @@
         let isWrongReviewMode = false;
 
         async function initApp() {
-            if (!supabase) return;
+            if (!supabaseClient) return;
             try {
-                const { data: { session } } = await supabase.auth.getSession();
+                const { data: { session } } = await supabaseClient.auth.getSession();
                 if (session) {
                     currentUser = session.user;
                     document.getElementById('user-email-display').innerText = currentUser.email;
@@ -214,7 +215,7 @@
                     showAuth();
                 }
 
-                supabase.auth.onAuthStateChange(async (event, session) => {
+                supabaseClient.auth.onAuthStateChange(async (event, session) => {
                     if (session) {
                         currentUser = session.user;
                         document.getElementById('user-email-display').innerText = currentUser.email;
@@ -258,7 +259,7 @@
             errEl.classList.add('hidden');
 
             try {
-                const { error } = await supabase.auth.signInWithPassword({ email, password });
+                const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
                 if (error) {
                     errEl.innerText = error.message;
                     errEl.classList.remove('hidden');
@@ -288,7 +289,7 @@
             }
 
             try {
-                const { data, error } = await supabase.auth.signUp({ email, password });
+                const { data, error } = await supabaseClient.auth.signUp({ email, password });
                 if (error) {
                     errEl.innerText = error.message;
                     errEl.classList.remove('hidden');
@@ -302,13 +303,13 @@
         }
 
         async function logoutUser() {
-            await supabase.auth.signOut();
+            await supabaseClient.auth.signOut();
         }
 
         async function loadAppData() {
             try {
-                const { data: banks, error: bErr } = await supabase.from('banks').select('*');
-                const { data: questions, error: qErr } = await supabase.from('questions').select('*');
+                const { data: banks, error: bErr } = await supabaseClient.from('banks').select('*');
+                const { data: questions, error: qErr } = await supabaseClient.from('questions').select('*');
                 
                 if (bErr || qErr) {
                     console.error('Error loading data', bErr || qErr);
@@ -320,7 +321,7 @@
                     questions: questions.filter(q => q.bank_id === b.id)
                 }));
 
-                const { data: progress, error: pErr } = await supabase
+                const { data: progress, error: pErr } = await supabaseClient
                     .from('user_progress')
                     .select('*')
                     .eq('user_id', currentUser.id);
@@ -549,7 +550,7 @@
             renderQuizQuestion();
 
             try {
-                await supabase.from('user_progress').upsert({
+                await supabaseClient.from('user_progress').upsert({
                     user_id: currentUser.id,
                     question_id: q.id,
                     status: status
@@ -625,7 +626,7 @@
             userProgressMap[card.id] = status;
 
             try {
-                await supabase.from('user_progress').upsert({
+                await supabaseClient.from('user_progress').upsert({
                     user_id: currentUser.id,
                     question_id: card.id,
                     status: status
