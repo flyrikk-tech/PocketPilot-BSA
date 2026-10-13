@@ -379,7 +379,7 @@
         async function loadAppData() {
             try {
                 const { data: banks, error: bErr } = await supabaseClient.from('banks').select('*');
-                const { data: questions, error: qErr } = await supabaseClient.from('questions').select('*');
+                const { data: questions, error: qErr } = await supabaseClient.from('questions').select('*').range(0, 4999);
                 
                 if (bErr || qErr) {
                     console.error('Error loading data', bErr || qErr);
