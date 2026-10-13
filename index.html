@@ -854,7 +854,7 @@
             const total = currentItems.length;
 
             document.getElementById('fc-progress-text').innerText = `Card ${currentIndex + 1} of ${total}`;
-            document.getElementById('fc-progress-bar'].style.width = `${((currentIndex + 1) / total) * 100}%`;
+            document.getElementById('fc-progress-bar').style.width = `${((currentIndex + 1) / total) * 100}%`;
             document.getElementById('fc-question').innerText = card.text;
             document.getElementById('fc-answer').innerText = card.answer;
         }
