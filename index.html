@@ -379,7 +379,8 @@
         async function loadAppData() {
             try {
                 const { data: banks, error: bErr } = await supabaseClient.from('banks').select('*');
-                const { data: questions, error: qErr } = await supabaseClient.from('questions').select('*');
+                // Increased range limit to 5000 questions to prevent truncation
+                const { data: questions, error: qErr } = await supabaseClient.from('questions').select('*').range(0, 4999);
                 
                 if (bErr || qErr) {
                     console.error('Error loading data', bErr || qErr);
@@ -853,7 +854,7 @@
             const total = currentItems.length;
 
             document.getElementById('fc-progress-text').innerText = `Card ${currentIndex + 1} of ${total}`;
-            document.getElementById('fc-progress-bar').style.width = `${((currentIndex + 1) / total) * 100}%`;
+            document.getElementById('fc-progress-bar'].style.width = `${((currentIndex + 1) / total) * 100}%`;
             document.getElementById('fc-question').innerText = card.text;
             document.getElementById('fc-answer').innerText = card.answer;
         }
