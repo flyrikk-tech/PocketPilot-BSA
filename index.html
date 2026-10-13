@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>PocketPilot - ATPL Exam Trainer</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Supabase JS Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        .perspective-1000 { perspective: 1000px; }
+        .transform-style-3d { transform-style: preserve-3d; }
+        .backface-hidden { backface-visibility: hidden; }
+        .rotate-y-180 { transform: rotateY(180deg); }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen font-sans antialiased selection:bg-blue-600 selection:text-white">
+
+    <!-- Top Header -->
+    <header class="bg-slate-900 border-b border-slate-800 sticky top-0 z-40 px-4 py-3 flex items-center justify-between shadow-md">
+        <div class="flex items-center space-x-2 cursor-pointer" onclick="if(currentUser) showHome()">
+            <div class="bg-blue-600 text-white p-2 rounded-xl font-bold tracking-wider shadow-inner text-lg">✈️</div>
+            <div>
+                <h1 class="font-extrabold text-lg tracking-tight text-white leading-none">PocketPilot</h1>
+                <span class="text-xs text-blue-400 font-medium">ATPL Exam Trainer</span>
+            </div>
+        </div>
+        <div id="header-user-area" class="flex items-center gap-3 hidden">
+            <span id="user-email-display" class="text-xs text-slate-400 hidden sm:inline"></span>
+            <button onclick="logoutUser()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs px-3 py-2 rounded-xl font-medium transition-all">Sign Out</button>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-3xl mx-auto p-4 sm:p-6 pb-24">
+
+        <!-- 0. AUTH VIEW (LOGIN / SIGNUP) -->
+        <div id="view-auth" class="max-w-md mx-auto mt-12 bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-6">
+            <div class="text-center space-y-2">
+                <h2 class="text-2xl font-bold text-white">Pilot Login</h2>
+                <p class="text-xs text-slate-400">Log in to sync your progress across devices.</p>
+            </div>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-medium text-slate-300 mb-1">Email</label>
+                    <input type="email" id="auth-email" placeholder="pilot@airline.com" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-blue-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-300 mb-1">Password</label>
+                    <input type="password" id="auth-password" placeholder="••••••••" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-blue-500">
+                </div>
+                <div id="auth-error" class="text-xs text-rose-400 text-center hidden"></div>
+                <div class="pt-2 flex gap-3">
+                    <button onclick="handleLogin()" class="flex-1 bg-blue-600 hover:bg-blue-500 font-semibold py-3 rounded-xl text-white text-sm shadow-lg transition-all">Log In</button>
+                    <button onclick="handleSignup()" class="flex-1 bg-slate-800 hover:bg-slate-700 font-semibold py-3 rounded-xl text-slate-200 text-sm transition-all">Sign Up</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 1. HOME VIEW -->
+        <div id="view-home" class="space-y-6 hidden">
+            <div class="bg-gradient-to-r from-blue-900/40 to-slate-900 p-6 rounded-2xl border border-blue-800/40 shadow-xl flex items-center justify-between">
+                <div>
+                    <h2 class="text-2xl font-bold mb-2 text-white">Welcome back, Pilot 👨‍✈️</h2>
+                    <p class="text-sm text-slate-300 leading-relaxed">
+                        Select a question bank below to start training. All question banks are centrally updated.
+                    </p>
+                </div>
+                <div id="header-stats" class="text-right text-xs text-slate-300 font-medium bg-slate-950/60 p-3 rounded-xl border border-slate-800 hidden sm:block"></div>
+            </div>
+
+            <div>
+                <h3 class="font-bold text-lg mb-4 text-slate-200">Available Question Banks</h3>
+                <div id="banks-list" class="space-y-3">
+                    <!-- Dynamically populated -->
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. SETUP VIEW -->
+        <div id="view-setup" class="space-y-6 hidden">
+            <button onclick="showHome()" class="text-sm text-blue-400 hover:underline flex items-center gap-1 font-medium mb-2">
+                ← Back to overview
+            </button>
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-5">
+                <h2 id="setup-bank-title" class="text-xl font-bold text-white"></h2>
+                
+                <div>
+                    <label class="block text-sm font-medium text-slate-300 mb-2">Number of questions in session</label>
+                    <div id="count-options" class="grid grid-cols-4 gap-2"></div>
+                </div>
+
+                <div class="pt-2 border-t border-slate-800">
+                    <label class="flex items-center space-x-3 cursor-pointer py-2">
+                        <input type="checkbox" id="skip-correct" checked class="w-5 h-5 rounded bg-slate-950 border-slate-700 text-blue-600 focus:ring-0">
+                        <span class="text-sm text-slate-300">Ignore items already mastered previously</span>
+                    </label>
+                </div>
+
+                <div class="pt-4">
+                    <button id="setup-start-btn" onclick="executeStartSession()" class="w-full font-semibold py-3.5 rounded-xl text-white shadow-lg text-sm transition-all">
+                        Start Session 🚀
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. QUIZ MODE -->
+        <div id="view-quiz" class="space-y-4 hidden">
+            <div class="flex items-center justify-between text-xs text-slate-400 px-1">
+                <button onclick="showHome()" class="hover:text-white">Cancel</button>
+                <span id="quiz-progress-text">Question 1 of 10</span>
+                <span id="quiz-score-text">Correct: 0%</span>
+            </div>
+
+            <div class="w-full bg-slate-900 h-2 rounded-full overflow-hidden border border-slate-800">
+                <div id="quiz-progress-bar" class="bg-blue-600 h-full transition-all duration-300" style="width: 0%"></div>
+            </div>
+
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-5">
+                <div id="quiz-question-text" class="text-lg font-semibold text-white leading-relaxed"></div>
+                <div id="quiz-options-list" class="space-y-3"></div>
+            </div>
+
+            <div class="flex justify-between pt-2">
+                <button id="btn-prev" onclick="prevQuestion()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-5 py-3 rounded-xl font-medium text-sm transition-all disabled:opacity-30 disabled:cursor-not-allowed">
+                    ← Previous
+                </button>
+                <button id="btn-next" onclick="nextQuestion()" class="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl font-semibold text-sm shadow-lg transition-all hidden">
+                    Next →
+                </button>
+            </div>
+        </div>
+
+        <!-- 4. FLASHCARD MODE -->
+        <div id="view-flashcard" class="space-y-4 hidden">
+            <div class="flex items-center justify-between text-xs text-slate-400 px-1">
+                <button onclick="showHome()" class="hover:text-white">Cancel</button>
+                <span id="fc-progress-text">Card 1 of 10</span>
+                <span class="text-purple-400 font-medium">Flashcard Mode</span>
+            </div>
+
+            <div class="w-full bg-slate-900 h-2 rounded-full overflow-hidden border border-slate-800">
+                <div id="fc-progress-bar" class="bg-purple-600 h-full transition-all duration-300" style="width: 0%"></div>
+            </div>
+
+            <div class="perspective-1000 w-full min-h-[300px] cursor-pointer" onclick="flipCard()">
+                <div id="fc-card-inner" class="relative w-full h-full min-h-[300px] transition-transform duration-500 transform-style-3d bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl flex flex-col justify-between">
+                    
+                    <div class="absolute inset-0 p-6 flex flex-col justify-between backface-hidden">
+                        <div class="text-xs uppercase tracking-wider text-slate-500 font-semibold">Question (Tap to flip)</div>
+                        <div id="fc-question" class="text-lg font-semibold text-white my-auto text-center leading-relaxed"></div>
+                        <div class="text-center text-xs text-purple-400 font-medium">Show Answer ↺</div>
+                    </div>
+
+                    <div class="absolute inset-0 p-6 flex flex-col justify-between backface-hidden rotate-y-180 bg-slate-900/95 rounded-2xl border border-purple-900/50">
+                        <div class="text-xs uppercase tracking-wider text-purple-400 font-semibold">Answer / Solution</div>
+                        <div id="fc-answer" class="text-lg font-semibold text-emerald-300 my-auto text-center leading-relaxed"></div>
+                        <div class="text-center text-xs text-slate-500">Tap to flip back</div>
+                    </div>
+
+                </div>
+            </div>
+
+            <div id="fc-rating-container" class="grid grid-cols-2 gap-3 pt-2 hidden">
+                <button onclick="rateFlashcard(false)" class="bg-rose-950/60 hover:bg-rose-900/80 border border-rose-800/60 text-rose-200 font-semibold py-3.5 rounded-xl text-sm transition-all">
+                    Need Practice ❌
+                </button>
+                <button onclick="rateFlashcard(true)" class="bg-emerald-950/60 hover:bg-emerald-900/80 border border-emerald-800/60 text-emerald-200 font-semibold py-3.5 rounded-xl text-sm transition-all">
+                    Knew It ✅
+                </button>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- JavaScript Logic with Supabase Integration -->
+    <script>
+        // --- BYTT UT MED DINE SUPABASE-NØKLER ---
+        const SUPABASE_URL = 'DIN_SUPABASE_URL';
+        const SUPABASE_ANON_KEY = 'DIN_SUPABASE_ANON_KEY';
+        
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        let currentUser = null;
+        let banksData = []; // [{id, title, type, questions: [...]}]
+        let userProgressMap = {}; // question_id -> 'correct' or 'wrong'
+
+        let currentBankId = null;
+        let currentItems = [];
+        let currentIndex = 0;
+        let userAnswers = {}; 
+        let isWrongReviewMode = false;
+
+        // Initialize app & check auth session
+        async function initApp() {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session) {
+                currentUser = session.user;
+                document.getElementById('user-email-display').innerText = currentUser.email;
+                document.getElementById('header-user-area').classList.remove('hidden');
+                await loadAppData();
+                showHome();
+            } else {
+                showAuth();
+            }
+
+            supabase.auth.onAuthStateChange(async (event, session) => {
+                if (session) {
+                    currentUser = session.user;
+                    document.getElementById('user-email-display').innerText = currentUser.email;
+                    document.getElementById('header-user-area').classList.remove('hidden');
+                    await loadAppData();
+                    showHome();
+                } else {
+                    currentUser = null;
+                    document.getElementById('header-user-area').classList.add('hidden');
+                    showAuth();
+                }
+            });
+        }
+
+        function showAuth() {
+            document.getElementById('view-auth').classList.remove('hidden');
+            document.getElementById('view-home').classList.add('hidden');
+            document.getElementById('view-setup').classList.add('hidden');
+            document.getElementById('view-quiz').classList.add('hidden');
+            document.getElementById('view-flashcard').classList.add('hidden');
+        }
+
+        function showHome() {
+            document.getElementById('view-auth').classList.add('hidden');
+            document.getElementById('view-home').classList.remove('hidden');
+            document.getElementById('view-setup').classList.add('hidden');
+            document.getElementById('view-quiz').classList.add('hidden');
+            document.getElementById('view-flashcard').classList.add('hidden');
+            renderBanksList();
+            updateHeaderStats();
+        }
+
+        async function handleLogin() {
+            const email = document.getElementById('auth-email').value.trim();
+            const password = document.getElementById('auth-password').value.trim();
+            const errEl = document.getElementById('auth-error');
+            errEl.classList.add('hidden');
+
+            const { error } = await supabase.auth.signInWithPassword({ email, password });
+            if (error) {
+                errEl.innerText = error.message;
+                errEl.classList.remove('hidden');
+            }
+        }
+
+        async function handleSignup() {
+            const email = document.getElementById('auth-email').value.trim();
+            const password = document.getElementById('auth-password').value.trim();
+            const errEl = document.getElementById('auth-error');
+            errEl.classList.add('hidden');
+
+            const { error } = await supabase.auth.signUp({ email, password });
+            if (error) {
+                errEl.innerText = error.message;
+                errEl.classList.remove('hidden');
+            } else {
+                alert('Signup successful! You can now log in.');
+            }
+        }
+
+        async function logoutUser() {
+            await supabase.auth.signOut();
+        }
+
+        async function loadAppData() {
+            // 1. Fetch banks and questions
+            const { data: banks, error: bErr } = await supabase.from('banks').select('*');
+            const { data: questions, error: qErr } = await supabase.from('questions').select('*');
+            
+            if (bErr || qErr) {
+                console.error('Error loading data', bErr || qErr);
+                return;
+            }
+
+            banksData = banks.map(b => ({
+                ...b,
+                questions: questions.filter(q => q.bank_id === b.id)
+            }));
+
+            // 2. Fetch user progress
+            const { data: progress, error: pErr } = await supabase
+                .from('user_progress')
+                .select('*')
+                .eq('user_id', currentUser.id);
+
+            if (!pErr && progress) {
+                userProgressMap = {};
+                progress.forEach(p => {
+                    userProgressMap[p.question_id] = p.status;
+                });
+            }
+        }
+
+        function updateHeaderStats() {
+            let totalItems = 0;
+            let totalCorrect = 0;
+            banksData.forEach(b => {
+                totalItems += b.questions.length;
+                b.questions.forEach(q => {
+                    if (userProgressMap[q.id] === 'correct') {
+                        totalCorrect++;
+                    }
+                });
+            });
+            const pct = totalItems > 0 ? Math.round((totalCorrect / totalItems) * 100) : 0;
+            document.getElementById('header-stats').innerHTML = `Total Mastery: <b>${pct}%</b><br><span class="text-slate-400 text-[10px]">${totalCorrect} / ${totalItems} mastered</span>`;
+        }
+
+        function renderBanksList() {
+            const container = document.getElementById('banks-list');
+            if (banksData.length === 0) {
+                container.innerHTML = `<div class="text-center py-12 text-slate-500 bg-slate-900/40 border border-slate-800 rounded-2xl text-sm">No question banks found in database.</div>`;
+                return;
+            }
+
+            container.innerHTML = banksData.map(bank => {
+                let correctCount = 0;
+                let wrongCount = 0;
+                const total = bank.questions.length;
+
+                bank.questions.forEach(q => {
+                    if (userProgressMap[q.id] === 'correct') correctCount++;
+                    if (userProgressMap[q.id] === 'wrong') wrongCount++;
+                });
+
+                const pct = total > 0 ? Math.round((correctCount / total) * 100) : 0;
+                const isFc = bank.type === 'flashcard';
+
+                return `
+                    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg flex flex-col gap-4">
+                        <div class="flex items-start justify-between">
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-xs px-2 py-0.5 rounded-md font-semibold ${isFc ? 'bg-purple-950 text-purple-300 border border-purple-800' : 'bg-blue-950 text-blue-300 border border-blue-800'}">
+                                        ${isFc ? '🎴 Flashcards' : '📝 Quiz'}
+                                    </span>
+                                    <h4 class="font-bold text-base text-white">${bank.title}</h4>
+                                </div>
+                                <span class="text-xs text-slate-400 mt-1 block">${total} items • Mastery: ${pct}%</span>
+                            </div>
+                        </div>
+                        <div class="w-full bg-slate-950 h-2 rounded-full overflow-hidden border border-slate-800">
+                            <div class="${isFc ? 'bg-purple-600' : 'bg-blue-600'} h-full" style="width: ${pct}%"></div>
+                        </div>
+                        <div class="flex flex-wrap gap-2 pt-1">
+                            <button onclick="openSetup('${bank.id}', false)" class="flex-1 ${isFc ? 'bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border-purple-800/50' : 'bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border-blue-800/50'} border py-2.5 px-4 rounded-xl text-xs font-semibold transition-all">
+                                ${isFc ? '🎴 Practice Flashcards' : '📝 Start Quiz'}
+                            </button>
+                            ${wrongCount > 0 ? `
+                            <button onclick="openSetup('${bank.id}', true)" class="bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-800/50 py-2.5 px-4 rounded-xl text-xs font-semibold transition-all">
+                                ⚠️ Practice Mistakes (${wrongCount})
+                            </button>` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function openSetup(bankId, wrongMode) {
+            currentBankId = bankId;
+            isWrongReviewMode = wrongMode;
+            const bank = banksData.find(b => b.id === bankId);
+            
+            document.getElementById('setup-bank-title').innerText = wrongMode ? `Review Mistakes: ${bank.title}` : bank.title;
+            
+            let availableCount = bank.questions.length;
+            if (wrongMode) {
+                availableCount = bank.questions.filter(q => userProgressMap[q.id] === 'wrong').length;
+            }
+
+            const counts = [10, 25, 50, 'All'].filter(c => c === 'All' || c <= availableCount);
+            if(counts.length === 0) counts.push('All');
+
+            document.getElementById('count-options').innerHTML = counts.map((c, idx) => `
+                <button onclick="selectCount('${c}')" class="count-btn py-2.5 rounded-xl text-xs font-bold border transition-all ${idx === 0 ? (bank.type === 'flashcard' ? 'bg-purple-600 border-purple-500 text-white' : 'bg-blue-600 border-blue-500 text-white') : 'bg-slate-950 border-slate-800 text-slate-300 hover:bg-slate-800'}" data-count="${c}">
+                    ${c}
+                </button>
+            `).join('');
+
+            const startBtn = document.getElementById('setup-start-btn');
+            if (bank.type === 'flashcard') {
+                startBtn.className = "w-full font-semibold py-3.5 rounded-xl text-white shadow-lg text-sm bg-purple-600 hover:bg-purple-500 transition-all";
+                startBtn.innerText = "Start Flashcards 🎴";
+            } else {
+                startBtn.className = "w-full font-semibold py-3.5 rounded-xl text-white shadow-lg text-sm bg-blue-600 hover:bg-blue-500 transition-all";
+                startBtn.innerText = "Start Quiz 📝";
+            }
+
+            document.getElementById('view-home').classList.add('hidden');
+            document.getElementById('view-setup').classList.remove('hidden');
+        }
+
+        function selectCount(count) {
+            const bank = banksData.find(b => b.id === currentBankId);
+            const activeColor = bank.type === 'flashcard' ? 'bg-purple-600 border-purple-500 text-white' : 'bg-blue-600 border-blue-500 text-white';
+            
+            document.querySelectorAll('.count-btn').forEach(btn => {
+                if(btn.getAttribute('data-count') == count) {
+                    btn.className = `count-btn py-2.5 rounded-xl text-xs font-bold border ${activeColor} transition-all`;
+                } else {
+                    btn.className = "count-btn py-2.5 rounded-xl text-xs font-bold border bg-slate-950 border-slate-800 text-slate-300 hover:bg-slate-800 transition-all";
+                }
+                btn.setAttribute('data-selected', btn.getAttribute('data-count') == count);
+            });
+        }
+
+        function executeStartSession() {
+            const bank = banksData.find(b => b.id === currentBankId);
+            const skipCorrect = document.getElementById('skip-correct').checked;
+
+            let pool = [];
+
+            if (isWrongReviewMode) {
+                pool = bank.questions.filter(q => userProgressMap[q.id] === 'wrong');
+            } else {
+                bank.questions.forEach(q => {
+                    if (!skipCorrect || userProgressMap[q.id] !== 'correct') {
+                        pool.push(q);
+                    }
+                });
+            }
+
+            pool.sort(() => Math.random() - 0.5);
+
+            const selectedBtn = document.querySelector('.count-btn[data-selected="true"]') || document.querySelector('.count-btn');
+            const countVal = selectedBtn ? selectedBtn.getAttribute('data-count') : 'All';
+
+            let limit = countVal === 'All' ? pool.length : parseInt(countVal);
+            currentItems = pool.slice(0, limit);
+
+            if (currentItems.length === 0) {
+                alert('No available items with these settings!');
+                return;
+            }
+
+            currentIndex = 0;
+            userAnswers = {};
+
+            document.getElementById('view-setup').classList.add('hidden');
+
+            if (bank.type === 'flashcard') {
+                document.getElementById('view-flashcard').classList.remove('hidden');
+                renderFlashcard();
+            } else {
+                document.getElementById('view-quiz').classList.remove('hidden');
+                renderQuizQuestion();
+            }
+        }
+
+        // --- QUIZ LOGIC ---
+        function renderQuizQuestion() {
+            const q = currentItems[currentIndex];
+            const total = currentItems.length;
+
+            document.getElementById('quiz-progress-text').innerText = `Question ${currentIndex + 1} of ${total}`;
+            document.getElementById('quiz-progress-bar').style.width = `${((currentIndex + 1) / total) * 100}%`;
+            document.getElementById('quiz-question-text').innerText = q.text;
+
+            const existingAnswer = userAnswers[currentIndex];
+            const isAnswered = existingAnswer !== undefined;
+
+            const optionsList = document.getElementById('quiz-options-list');
+            optionsList.innerHTML = q.options.map((opt, oIdx) => {
+                let btnStyle = "bg-slate-950 border-slate-800 text-slate-200 hover:bg-slate-800/80";
+                let badge = String.fromCharCode(97 + oIdx) + ")";
+
+                if (isAnswered) {
+                    if (opt.correct) {
+                        btnStyle = "bg-emerald-950/60 border-emerald-700 text-emerald-200";
+                    } else if (oIdx === existingAnswer) {
+                        btnStyle = "bg-rose-950/60 border-rose-700 text-rose-200";
+                    } else {
+                        btnStyle = "bg-slate-950/40 border-slate-900 text-slate-500 opacity-50";
+                    }
+                }
+
+                return `
+                    <button onclick="handleQuizAnswer(${oIdx})" ${isAnswered ? 'disabled' : ''} class="w-full text-left p-4 rounded-xl border font-medium text-sm transition-all flex items-center gap-3 ${btnStyle}">
+                        <span class="w-6 h-6 rounded-lg bg-slate-900 border border-slate-700 flex items-center justify-center text-xs text-slate-400 font-bold">${badge}</span>
+                        <span class="flex-1">${opt.text}</span>
+                    </button>
+                `;
+            }).join('');
+
+            document.getElementById('btn-prev').disabled = currentIndex === 0;
+            const nextBtn = document.getElementById('btn-next');
+            if (isAnswered) {
+                nextBtn.classList.remove('hidden');
+                nextBtn.innerText = currentIndex === total - 1 ? 'Finish Session 🏁' : 'Next →';
+            } else {
+                nextBtn.classList.add('hidden');
+            }
+
+            updateQuizScoreRealtime();
+        }
+
+        async function handleQuizAnswer(optionIndex) {
+            userAnswers[currentIndex] = optionIndex;
+            const q = currentItems[currentIndex];
+            const isCorrect = q.options[optionIndex].correct;
+            const status = isCorrect ? 'correct' : 'wrong';
+
+            userProgressMap[q.id] = status;
+            renderQuizQuestion();
+
+            // Lagre til Supabase i bakgrunnen
+            await supabase.from('user_progress').upsert({
+                user_id: currentUser.id,
+                question_id: q.id,
+                status: status
+            }, { onConflict: 'user_id,question_id' });
+        }
+
+        function updateQuizScoreRealtime() {
+            let correctCount = 0;
+            let answeredCount = 0;
+            Object.keys(userAnswers).forEach(idx => {
+                answeredCount++;
+                const q = currentItems[idx];
+                const selectedOpt = userAnswers[idx];
+                if (q.options[selectedOpt].correct) correctCount++;
+            });
+            const pct = answeredCount > 0 ? Math.round((correctCount / answeredCount) * 100) : 0;
+            document.getElementById('quiz-score-text').innerText = `Correct: ${pct}%`;
+        }
+
+        function nextQuestion() {
+            if (currentIndex < currentItems.length - 1) {
+                currentIndex++;
+                renderQuizQuestion();
+            } else {
+                showHome();
+            }
+        }
+
+        function prevQuestion() {
+            if (currentIndex > 0) {
+                currentIndex--;
+                renderQuizQuestion();
+            }
+        }
+
+        // --- FLASHCARD LOGIC ---
+        let isCardFlipped = false;
+
+        function renderFlashcard() {
+            isCardFlipped = false;
+            const cardInner = document.getElementById('fc-card-inner');
+            cardInner.style.transform = 'rotateY(0deg)';
+            document.getElementById('fc-rating-container').classList.add('hidden');
+
+            const card = currentItems[currentIndex];
+            const total = currentItems.length;
+
+            document.getElementById('fc-progress-text').innerText = `Card ${currentIndex + 1} of ${total}`;
+            document.getElementById('fc-progress-bar').style.width = `${((currentIndex + 1) / total) * 100}%`;
+            document.getElementById('fc-question').innerText = card.text;
+            document.getElementById('fc-answer').innerText = card.answer;
+        }
+
+        function flipCard() {
+            isCardFlipped = !isCardFlipped;
+            const cardInner = document.getElementById('fc-card-inner');
+            if (isCardFlipped) {
+                cardInner.style.transform = 'rotateY(180deg)';
+                document.getElementById('fc-rating-container').classList.remove('hidden');
+            } else {
+                cardInner.style.transform = 'rotateY(0deg)';
+                document.getElementById('fc-rating-container').classList.add('hidden');
+            }
+        }
+
+        async function rateFlashcard(kjennerDet) {
+            const card = currentItems[currentIndex];
+            const status = kjennerDet ? 'correct' : 'wrong';
+
+            userProgressMap[card.id] = status;
+
+            // Lagre til Supabase i bakgrunnen
+            await supabase.from('user_progress').upsert({
+                user_id: currentUser.id,
+                question_id: card.id,
+                status: status
+            }, { onConflict: 'user_id,question_id' });
+
+            if (currentIndex < currentItems.length - 1) {
+                currentIndex++;
+                renderFlashcard();
+            } else {
+                showHome();
+            }
+        }
+
+        // Start app
+        initApp();
+    </script>
+</body>
+</html>
