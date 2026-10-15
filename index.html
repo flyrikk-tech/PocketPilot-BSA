@@ -225,7 +225,7 @@
     <!-- JavaScript Logic -->
     <script>
         const SUPABASE_URL = 'https://nqjndoawqzkszilxsnnj.supabase.co';
-        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5xam5kb2F3cXprc3ppbHhzbm5qIiwicm9sZSI6ImFub24iຕ່OjE3OTE4NzA5NTgsImV4cCI6MjEwNzQ0Njk1OH0.5M8wGb0FJRUIjtWJbinDeuXGgoXbRu0MIUWB6xgWE5c';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5xam5kb2F3cXprc3ppbHhzbm5qIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE4NzA5NTgsImV4cCI6MjEwNzQ0Njk1OH0.5M8wGb0FJRUIjtWJbinDeuXGgoXbRu0MIUWB6xgWE5c';
         
         const ADMIN_EMAIL = 'flyrikk@gmail.com';
 
@@ -265,21 +265,12 @@
                     }
 
                     await loadAppData();
-                    
-                    // Only showHome on initial load if we are not already active in a quiz/flashcard session
-                    const quizHidden = document.getElementById('view-quiz').classList.contains('hidden');
-                    const fcHidden = document.getElementById('view-flashcard').classList.contains('hidden');
-                    if (quizHidden && fcHidden) {
-                        showHome();
-                    }
+                    showHome();
                 } else {
                     showAuth();
                 }
 
                 supabaseClient.auth.onAuthStateChange(async (event, session) => {
-                    // Ignore background token refreshes to prevent resetting active sessions when switching tabs/apps
-                    if (event === 'TOKEN_REFRESHED') return;
-
                     if (session) {
                         currentUser = session.user;
                         document.getElementById('user-email-display').innerText = currentUser.email;
@@ -294,14 +285,8 @@
                             document.getElementById('welcome-subtitle').innerText = "Select a question bank below to start training. All question banks are centrally updated.";
                         }
 
-                        // If user is currently in an active quiz or flashcard session, do NOT reset to home view!
-                        const quizViewHidden = document.getElementById('view-quiz').classList.contains('hidden');
-                        const flashcardViewHidden = document.getElementById('view-flashcard').classList.contains('hidden');
-                        
-                        if (quizViewHidden && flashcardViewHidden) {
-                            await loadAppData();
-                            showHome();
-                        }
+                        await loadAppData();
+                        showHome();
                     } else {
                         currentUser = null;
                         document.getElementById('header-user-area').classList.add('hidden');
