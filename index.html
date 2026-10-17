@@ -19,7 +19,7 @@
 
     <!-- Top Header -->
     <header class="bg-slate-900 border-b border-slate-800 sticky top-0 z-40 px-4 py-3 flex items-center justify-between shadow-md">
-        <div class="flex items-center space-x-2 cursor-pointer" onclick="if(currentUser) showHome()">
+        <div class="flex items-center space-x-2 cursor-pointer" onclick="if(currentUser) showHome(true)">
             <div class="bg-blue-600 text-white p-2 rounded-xl font-bold tracking-wider shadow-inner text-lg">✈️</div>
             <div>
                 <h1 class="font-extrabold text-lg tracking-tight text-white leading-none">PocketPilot</h1>
@@ -57,8 +57,8 @@
                 </div>
                 <div id="auth-error" class="text-xs text-rose-400 text-center font-medium bg-rose-950/40 p-3 rounded-xl border border-rose-900/50 hidden"></div>
                 <div class="pt-2 flex gap-3">
-                    <button onclick="handleLogin()" class="flex-1 bg-blue-600 hover:bg-blue-500 font-semibold py-3 rounded-xl text-white text-sm shadow-lg transition-all">Log In</button>
-                    <button onclick="handleSignup()" class="flex-1 bg-slate-800 hover:bg-slate-700 font-semibold py-3 rounded-xl text-slate-200 text-sm transition-all">Sign Up</button>
+                    <button id="btn-login" onclick="handleLogin()" class="flex-1 bg-blue-600 hover:bg-blue-500 font-semibold py-3 rounded-xl text-white text-sm shadow-lg transition-all">Log In</button>
+                    <button id="btn-signup" onclick="handleSignup()" class="flex-1 bg-slate-800 hover:bg-slate-700 font-semibold py-3 rounded-xl text-slate-200 text-sm transition-all">Sign Up</button>
                 </div>
             </div>
         </div>
@@ -83,7 +83,7 @@
 
         <!-- 2. SETUP VIEW -->
         <div id="view-setup" class="space-y-6 hidden">
-            <button onclick="showHome()" class="text-sm text-blue-400 hover:underline flex items-center gap-1 font-medium mb-2">
+            <button onclick="showHome(true)" class="text-sm text-blue-400 hover:underline flex items-center gap-1 font-medium mb-2">
                 ← Back to overview
             </button>
             <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-5">
@@ -112,7 +112,7 @@
         <!-- 3. QUIZ MODE -->
         <div id="view-quiz" class="space-y-4 hidden">
             <div class="flex items-center justify-between text-xs text-slate-400 px-1">
-                <button onclick="showHome()" class="hover:text-white">Cancel</button>
+                <button onclick="showHome(true)" class="hover:text-white">Cancel</button>
                 <span id="quiz-progress-text">Question 1 of 10</span>
                 <span id="quiz-score-text">Correct: 0%</span>
             </div>
@@ -139,7 +139,7 @@
         <!-- 4. FLASHCARD MODE -->
         <div id="view-flashcard" class="space-y-4 hidden">
             <div class="flex items-center justify-between text-xs text-slate-400 px-1">
-                <button onclick="showHome()" class="hover:text-white">Cancel</button>
+                <button onclick="showHome(true)" class="hover:text-white">Cancel</button>
                 <span id="fc-progress-text">Card 1 of 10</span>
                 <span class="text-purple-400 font-medium">Flashcard Mode</span>
             </div>
@@ -228,6 +228,7 @@
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5xam5kb2F3cXprc3ppbHhzbm5qIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE4NzA5NTgsImV4cCI6MjEwNzQ0Njk1OH0.5M8wGb0FJRUIjtWJbinDeuXGgoXbRu0MIUWB6xgWE5c';
         
         const ADMIN_EMAIL = 'flyrikk@gmail.com';
+        const ACTIVE_SESSION_KEY = 'pocketpilot_active_session';
 
         let supabaseClient = null;
         try {
@@ -246,51 +247,134 @@
         let userAnswers = {}; 
         let isWrongReviewMode = false;
 
+        // --- SESSION PERSISTENCE HELPERS ---
+        function isSessionViewOpen() {
+            const quizOpen = !document.getElementById('view-quiz').classList.contains('hidden');
+            const fcOpen = !document.getElementById('view-flashcard').classList.contains('hidden');
+            const setupOpen = !document.getElementById('view-setup').classList.contains('hidden');
+            return quizOpen || fcOpen || setupOpen;
+        }
+
+        function saveActiveSession(mode) {
+            if (!currentUser || !currentBankId || currentItems.length === 0) return;
+            const sessionState = {
+                userId: currentUser.id,
+                bankId: currentBankId,
+                mode: mode, // 'quiz' or 'flashcard'
+                items: currentItems,
+                index: currentIndex,
+                answers: userAnswers,
+                isWrongReviewMode: isWrongReviewMode
+            };
+            try {
+                localStorage.setItem(ACTIVE_SESSION_KEY, JSON.stringify(sessionState));
+            } catch (e) {
+                console.warn("Could not save session to localStorage:", e);
+            }
+        }
+
+        function clearActiveSession() {
+            try {
+                localStorage.removeItem(ACTIVE_SESSION_KEY);
+            } catch (e) {
+                console.warn("Could not clear localStorage:", e);
+            }
+        }
+
+        function restoreActiveSession() {
+            try {
+                const raw = localStorage.getItem(ACTIVE_SESSION_KEY);
+                if (!raw || !currentUser) return false;
+
+                const state = JSON.parse(raw);
+                if (state.userId !== currentUser.id) return false;
+                if (!state.items || state.items.length === 0) {
+                    clearActiveSession();
+                    return false;
+                }
+
+                currentBankId = state.bankId;
+                currentItems = state.items;
+                currentIndex = state.index || 0;
+                userAnswers = state.answers || {};
+                isWrongReviewMode = !!state.isWrongReviewMode;
+
+                document.getElementById('view-auth').classList.add('hidden');
+                document.getElementById('view-home').classList.add('hidden');
+                document.getElementById('view-setup').classList.add('hidden');
+
+                if (state.mode === 'flashcard') {
+                    document.getElementById('view-quiz').classList.add('hidden');
+                    document.getElementById('view-flashcard').classList.remove('hidden');
+                    renderFlashcard();
+                } else {
+                    document.getElementById('view-flashcard').classList.add('hidden');
+                    document.getElementById('view-quiz').classList.remove('hidden');
+                    renderQuizQuestion();
+                }
+                return true;
+            } catch (e) {
+                console.error("Failed to restore active session:", e);
+                clearActiveSession();
+                return false;
+            }
+        }
+
+        function updateHeaderForUser(user) {
+            currentUser = user;
+            document.getElementById('user-email-display').innerText = currentUser.email;
+            document.getElementById('header-user-area').classList.remove('hidden');
+            
+            if (currentUser.email === ADMIN_EMAIL) {
+                document.getElementById('admin-add-btn').classList.remove('hidden');
+                document.getElementById('admin-add-btn').classList.add('flex');
+                document.getElementById('welcome-subtitle').innerText = "Select a question bank below to start training. Tap the + button above to import new questions.";
+            } else {
+                document.getElementById('admin-add-btn').classList.add('hidden');
+                document.getElementById('welcome-subtitle').innerText = "Select a question bank below to start training. All question banks are centrally updated.";
+            }
+        }
+
+        async function completeLoginAndRender(user) {
+            updateHeaderForUser(user);
+            await loadAppData();
+            if (!restoreActiveSession()) {
+                showHome(false);
+            }
+        }
+
         async function initApp() {
             if (!supabaseClient) return;
             try {
                 const { data: { session } } = await supabaseClient.auth.getSession();
-                if (session) {
-                    currentUser = session.user;
-                    document.getElementById('user-email-display').innerText = currentUser.email;
-                    document.getElementById('header-user-area').classList.remove('hidden');
-                    
-                    if (currentUser.email === ADMIN_EMAIL) {
-                        document.getElementById('admin-add-btn').classList.remove('hidden');
-                        document.getElementById('admin-add-btn').classList.add('flex');
-                        document.getElementById('welcome-subtitle').innerText = "Select a question bank below to start training. Tap the + button above to import new questions.";
-                    } else {
-                        document.getElementById('admin-add-btn').classList.add('hidden');
-                        document.getElementById('welcome-subtitle').innerText = "Select a question bank below to start training. All question banks are centrally updated.";
-                    }
-
-                    await loadAppData();
-                    showHome();
+                if (session && session.user) {
+                    await completeLoginAndRender(session.user);
                 } else {
                     showAuth();
                 }
 
-                supabaseClient.auth.onAuthStateChange(async (event, session) => {
-                    if (session) {
-                        currentUser = session.user;
-                        document.getElementById('user-email-display').innerText = currentUser.email;
-                        document.getElementById('header-user-area').classList.remove('hidden');
-                        
-                        if (currentUser.email === ADMIN_EMAIL) {
-                            document.getElementById('admin-add-btn').classList.remove('hidden');
-                            document.getElementById('admin-add-btn').classList.add('flex');
-                            document.getElementById('welcome-subtitle').innerText = "Select a question bank below to start training. Tap the + button above to import new questions.";
-                        } else {
-                            document.getElementById('admin-add-btn').classList.add('hidden');
-                            document.getElementById('welcome-subtitle').innerText = "Select a question bank below to start training. All question banks are centrally updated.";
-                        }
-
-                        await loadAppData();
-                        showHome();
-                    } else {
+                // Non-blocking listener so Supabase never deadlocks during signInWithPassword
+                supabaseClient.auth.onAuthStateChange((event, session) => {
+                    if (event === 'SIGNED_OUT' || !session) {
                         currentUser = null;
+                        clearActiveSession();
                         document.getElementById('header-user-area').classList.add('hidden');
                         showAuth();
+                        return;
+                    }
+
+                    // If a quiz, flashcard, or setup view is already open on screen, DO NOT interrupt it!
+                    if (isSessionViewOpen()) {
+                        currentUser = session.user;
+                        return;
+                    }
+
+                    // If we are still sitting on the login screen when a valid session arrives, log in:
+                    const authVisible = !document.getElementById('view-auth').classList.contains('hidden');
+                    if (authVisible && session.user) {
+                        setTimeout(() => {
+                            completeLoginAndRender(session.user);
+                        }, 0);
                     }
                 });
             } catch (err) {
@@ -300,7 +384,6 @@
         }
 
         function showAuth() {
-            document.getElementById('view-auth').classList.add('hidden');
             document.getElementById('view-auth').classList.remove('hidden');
             document.getElementById('view-home').classList.add('hidden');
             document.getElementById('view-setup').classList.add('hidden');
@@ -308,7 +391,10 @@
             document.getElementById('view-flashcard').classList.add('hidden');
         }
 
-        function showHome() {
+        function showHome(clearSaved = true) {
+            if (clearSaved) {
+                clearActiveSession();
+            }
             document.getElementById('view-auth').classList.add('hidden');
             document.getElementById('view-home').classList.remove('hidden');
             document.getElementById('view-setup').classList.add('hidden');
@@ -333,17 +419,32 @@
             const email = document.getElementById('auth-email').value.trim();
             const password = document.getElementById('auth-password').value.trim();
             const errEl = document.getElementById('auth-error');
+            const loginBtn = document.getElementById('btn-login');
             errEl.classList.add('hidden');
 
+            if (!email || !password) {
+                errEl.innerText = "Please enter both email and password.";
+                errEl.classList.remove('hidden');
+                return;
+            }
+
             try {
-                const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+                loginBtn.disabled = true;
+                loginBtn.innerText = "Logging in...";
+
+                const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
                 if (error) {
                     errEl.innerText = error.message;
                     errEl.classList.remove('hidden');
+                } else if (data && data.user) {
+                    await completeLoginAndRender(data.user);
                 }
             } catch (err) {
                 errEl.innerText = err.message;
                 errEl.classList.remove('hidden');
+            } finally {
+                loginBtn.disabled = false;
+                loginBtn.innerText = "Log In";
             }
         }
 
@@ -380,6 +481,7 @@
         }
 
         async function logoutUser() {
+            clearActiveSession();
             await supabaseClient.auth.signOut();
         }
 
@@ -426,7 +528,7 @@
             }
             alert('Bank deleted successfully.');
             await loadAppData();
-            showHome();
+            showHome(false);
         }
 
         function openManageModal(bankId) {
@@ -548,7 +650,7 @@
             document.getElementById('import-raw-text').value = '';
             closeAddModal();
             await loadAppData();
-            showHome();
+            showHome(false);
         }
 
         function parseWordQuizText(text) {
@@ -613,7 +715,6 @@
 
             for (let i = 0; i < lines.length; i++) {
                 let line = lines[i];
-                // Matches format: "1. Q: What does CB stand for? A: Cumulonimbus"
                 const match = line.match(/^(\d+)[\.\)]\s*(?:Q[:\s]*)?(.*?)(?:\s+A[:\s]+)(.*)$/i);
                 if (match) {
                     cards.push({
@@ -781,9 +882,11 @@
 
             if (bank.type === 'flashcard') {
                 document.getElementById('view-flashcard').classList.remove('hidden');
+                saveActiveSession('flashcard');
                 renderFlashcard();
             } else {
                 document.getElementById('view-quiz').classList.remove('hidden');
+                saveActiveSession('quiz');
                 renderQuizQuestion();
             }
         }
@@ -842,6 +945,7 @@
             const status = isCorrect ? 'correct' : 'wrong';
 
             userProgressMap[q.id] = status;
+            saveActiveSession('quiz');
             renderQuizQuestion();
 
             try {
@@ -862,7 +966,9 @@
                 answeredCount++;
                 const q = currentItems[idx];
                 const selectedOpt = userAnswers[idx];
-                if (q.options[selectedOpt].correct) correctCount++;
+                if (q && q.options && q.options[selectedOpt] && q.options[selectedOpt].correct) {
+                    correctCount++;
+                }
             });
             const pct = answeredCount > 0 ? Math.round((correctCount / answeredCount) * 100) : 0;
             document.getElementById('quiz-score-text').innerText = `Correct: ${pct}%`;
@@ -871,15 +977,17 @@
         function nextQuestion() {
             if (currentIndex < currentItems.length - 1) {
                 currentIndex++;
+                saveActiveSession('quiz');
                 renderQuizQuestion();
             } else {
-                showHome();
+                showHome(true);
             }
         }
 
         function prevQuestion() {
             if (currentIndex > 0) {
                 currentIndex--;
+                saveActiveSession('quiz');
                 renderQuizQuestion();
             }
         }
@@ -932,9 +1040,10 @@
 
             if (currentIndex < currentItems.length - 1) {
                 currentIndex++;
+                saveActiveSession('flashcard');
                 renderFlashcard();
             } else {
-                showHome();
+                showHome(true);
             }
         }
 
